@@ -7,6 +7,8 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as BC
 
 
+data Message = Message Int Socket
+
 data Transaction = Transaction {
   transactionBuffered :: Bool,
   transactionPersisted :: Bool,
@@ -15,17 +17,26 @@ data Transaction = Transaction {
 }
 
 data QueueState = QueueState {
-  qsBufferUsed :: MVar Int,
-  qsPersistanceUsed :: MVar Int,
+  qsBufferUsed :: Int,
   qsBufferSize :: Int,
+  qsPersistanceUsed :: Int,
   qsPersistanceSize :: Int,
   qsMaxMessageSize :: Int
 }
 
-putWorker :: QueueState -> Socket -> IO ()
-putWorker qs socket = do
+putWorker :: MVar(QueueState) -> Socket -> IO ()
+putWorker mqs socket = do
     headerBytes <- recv socket 8
     let (_, length) = parseHeader headerBytes
+    qs <- takeMVar mqs
+    if (length <= (qsMaxMessageSize qs))
+      then do
+        let (qs',actions) = persist qs (Message length socket)
+        putMVar mqs qs'
+        actions
+      else do
+        putMVar mqs qs
+    putWorker mqs socket
 
 -- Er zijn 2 gevallen:
 --
@@ -48,16 +59,43 @@ putWorker qs socket = do
 -- van de schijf te lezen (om meerdere concurrente transacties te ondersteunen) kunnen we meerdere
 -- voorgealloceerde bestanden gebruiken. Om fragmentatie te voorkomen geen bestand per transactie.  
 
-persist = undefined
-buffer = undefined
+persist :: QueueState -> Message -> (QueueState, IO())
+persist qs m | memoryFreeDiskHasQueue qs m = (queueStateStore qs Disk message, saveToDisk message)
+             | memoryFull qs m = (queueStateStore qs Disk message, saveToDisk message)
+             | memoryFreeDiskEmpty qs m = (queueStateStore qs DiskMemory message, saveToBoth)
+  where
+    saveToBoth = do 
+      strictMessage <- saveToMemory message
+      saveToDisk strictMessage
+
+saveToDisk = undefined
+saveToMemory = undefined
+
+data StorageType = Disk | DiskMemory
+queueStateStore :: QueueState -> StorageType -> Message -> QueueState
+queueStateStore qs Disk m = qs { qsPersistanceUsed = (qsPersistanceUsed qs) - (messageSize m)} 
+queueStateStore qs DiskMemory m = qs { qsPersistanceUsed = (qsPersistanceUsed qs) - (messageSize m),
+                                       qsBufferUsed = (qsBufferUsed qs) - (messageSize m)
+                                     } 
+
+
+-- TODO rewrite in terms of eachother
+memoryFreeDiskHasQueue qs (Message length _) =
+    qsBufferSize qs - qsBufferUsed qs >= length &&
+    qsPersistanceUsed qs > 0
+memoryFull qs (Message length _) = 
+    qsBufferSize qs - qsBufferUsed qs < length
+memoryFreeDiskEmpty qs (Message length _) =
+    qsBufferSize qs - qsBufferUsed qs >= length &&
+    qsPersistanceUsed qs == 0
+    
 
 main :: IO ()
 main = do
-  usedBufferVar <- newMVar 0
-  usedPersistanceVar <- newMVar 0
   let queueState = QueueState usedBufferVar 128 usedPersistanceVar 1024 25 
+  queueStateVar <- newMVar queueState
   listenSock startListenSock
   forever $ do
-    (sock; ) accept listenSock
-    forkIO $ putWorker queueState sock
+    (sock,_) <- accept listenSock
+    forkIO $ putWorker queueStateVar sock
 
