@@ -1,5 +1,7 @@
 module IIQueue where
 
+import Control.Monad
+import Control.Concurrent
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 import Network.Socket.ByteString
 import qualified Data.ByteString as BS
@@ -23,6 +25,8 @@ data QueueState = QueueState {
   qsPersistanceSize :: Int,
   qsMaxMessageSize :: Int
 }
+
+parseHeader = undefined
 
 putWorker :: MVar(QueueState) -> Socket -> IO ()
 putWorker mqs socket = do
@@ -60,12 +64,12 @@ putWorker mqs socket = do
 -- voorgealloceerde bestanden gebruiken. Om fragmentatie te voorkomen geen bestand per transactie.  
 
 persist :: QueueState -> Message -> (QueueState, IO())
-persist qs m | memoryFreeDiskHasQueue qs m = (queueStateStore qs Disk message, saveToDisk message)
-             | memoryFull qs m = (queueStateStore qs Disk message, saveToDisk message)
-             | memoryFreeDiskEmpty qs m = (queueStateStore qs DiskMemory message, saveToBoth)
+persist qs m | memoryFreeDiskHasQueue qs m = (queueStateStore qs Disk m, saveToDisk m)
+             | memoryFull qs m = (queueStateStore qs Disk m, saveToDisk m)
+             | memoryFreeDiskEmpty qs m = (queueStateStore qs DiskMemory m, saveToBoth)
   where
     saveToBoth = do 
-      strictMessage <- saveToMemory message
+      strictMessage <- saveToMemory m
       saveToDisk strictMessage
 
 saveToDisk = undefined
@@ -73,9 +77,9 @@ saveToMemory = undefined
 
 data StorageType = Disk | DiskMemory
 queueStateStore :: QueueState -> StorageType -> Message -> QueueState
-queueStateStore qs Disk m = qs { qsPersistanceUsed = (qsPersistanceUsed qs) - (messageSize m)} 
-queueStateStore qs DiskMemory m = qs { qsPersistanceUsed = (qsPersistanceUsed qs) - (messageSize m),
-                                       qsBufferUsed = (qsBufferUsed qs) - (messageSize m)
+queueStateStore qs Disk (Message length _) = qs { qsPersistanceUsed = (qsPersistanceUsed qs) - length} 
+queueStateStore qs DiskMemory (Message length _) = qs { qsPersistanceUsed = (qsPersistanceUsed qs) - length,
+                                       qsBufferUsed = (qsBufferUsed qs) - length
                                      } 
 
 
@@ -92,9 +96,10 @@ memoryFreeDiskEmpty qs (Message length _) =
 
 main :: IO ()
 main = do
-  let queueState = QueueState usedBufferVar 128 usedPersistanceVar 1024 25 
+  let queueState = QueueState 0 128 0 1024 25 
   queueStateVar <- newMVar queueState
-  listenSock startListenSock
+  listenSock <- socket AF_INET Stream 6 
+  listen listenSock 100
   forever $ do
     (sock,_) <- accept listenSock
     forkIO $ putWorker queueStateVar sock
