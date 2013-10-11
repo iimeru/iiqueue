@@ -82,8 +82,6 @@ queueStateStore qs DiskMemory (Message length _) = qs { qsPersistanceUsed = (qsP
                                        qsBufferUsed = (qsBufferUsed qs) - length
                                      } 
 
-
--- TODO rewrite in terms of eachother
 memoryFreeDiskHasQueue qs (Message length _) =
     qsBufferSize qs - qsBufferUsed qs >= length &&
     qsPersistanceUsed qs > 0
@@ -92,7 +90,6 @@ memoryFull qs (Message length _) =
 memoryFreeDiskEmpty qs (Message length _) =
     qsBufferSize qs - qsBufferUsed qs >= length &&
     qsPersistanceUsed qs == 0
-    
 
 main :: IO ()
 main = do
