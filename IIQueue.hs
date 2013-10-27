@@ -8,14 +8,14 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as BC
 
-
 data Message = Message Int Socket
 
 data Transaction = Transaction {
   transactionBuffered :: Bool,
   transactionPersisted :: Bool,
   transactionProcessed :: Bool,
-  transactionData :: BS.ByteString
+  transactionData :: BS.ByteString,
+  transactionPersistanceId :: Int
 }
 
 data QueueState = QueueState {
@@ -23,7 +23,15 @@ data QueueState = QueueState {
   qsBufferSize :: Int,
   qsPersistanceUsed :: Int,
   qsPersistanceSize :: Int,
-  qsMaxMessageSize :: Int
+  qsMaxMessageSize :: Int,
+  qsNewestItem :: Item,
+  qsOldestItem :: Item,
+  qsOldestDiskItem :: Item
+}
+
+data Item = Item {
+  itemTransaction :: Transaction,
+  itemNext :: Maybe MemoryItem
 }
 
 parseHeader = undefined
@@ -72,6 +80,34 @@ persist qs m | memoryFreeDiskHasQueue qs m = (queueStateStore qs Disk m, saveToD
       strictMessage <- saveToMemory m
       saveToDisk strictMessage
 
+--
+-- Iets wordt geappend aan de queue. Yield een nieuwe queue met het laatste element bovenop. Een
+-- linked list is waarschijnlijk het handigst. Dus een QueueState heeft een link naar het nieuwste
+-- element en het oudste element.
+--
+-- Er is ook een link naar het oudste element op de schijf, omdat die wellicht ingeswapped moet
+-- worden.
+-- 
+-- Performance ding: als er geheugen vrij is moet dat gebruikt worden, dus het moet mogelijk zijn
+-- voor nieuwe elementen om voor te pikken in de memory queue. Volgorde is niet zo heel belangrijk.
+-- Maar om eerlijkheid van de queue te garanderen mag het niet zo zijn dat volgorde wordt genegeerd.
+--
+-- Hoe staan dingen op de hardeschijf?
+--
+-- We willen messages van enkele bytes tot honderden mb's ondersteunen. Maar vooral veel kleine messages
+-- dus we gebruiken geprealloceerde files die meerdere messages bevatten. Omdat het een queue is, kunnen
+-- we er een cyclische buffer van maken.
+--
+-- Dus iedere file heeft een lengte, en een 0 index.
+-- Iedere message heeft een offset en een length. 
+--
+-- Er mag maar 1 concurrente lezer zijn, en maar 1 concurrente schrijver. Dit om contentie op de hdd te
+-- voorkomen.  
+-- 
+-- Waarom zouden er meerdere files zijn? Om te voorkomen dat alle benodigde ruimte geprealloceerd moet zijn.
+-- Willen we dat echt? ... ik weet het niet..
+-- 
+
 saveToDisk = undefined
 saveToMemory = undefined
 
@@ -100,4 +136,3 @@ main = do
   forever $ do
     (sock,_) <- accept listenSock
     forkIO $ putWorker queueStateVar sock
-
