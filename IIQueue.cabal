@@ -1,0 +1,14 @@
+Name:                IIQueue
+Version:             0.1
+Description:         File Backed Message Queue
+License:             BSD3
+License-file:        LICENSE
+Author:              Tinco Andringa
+Maintainer:          mail@tinco.nl
+Build-Type:          Simple
+Cabal-Version:       >=1.2
+ 
+Library
+  Build-Depends:     base, random, binary, containers, bytestring, network, pipes, pipes-network >= 0.6.0
+  Exposed-modules:   IIQueueStore
+  ghc-options:       -Wall

@@ -108,7 +108,8 @@ persist qs m | memoryFreeDiskHasQueue qs m = (queueStateStore qs Disk m, saveToD
 -- Willen we dat echt? ... ik weet het niet..
 -- 
 
-saveToDisk = undefined
+saveToDisk (Message length sock) = undefined
+saveToDisk bs = 
 saveToMemory = undefined
 
 data StorageType = Disk | DiskMemory
