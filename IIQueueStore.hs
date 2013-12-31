@@ -20,7 +20,7 @@ type StoreContext = Map String StoreFile
 type StoreFile = (IO.Handle, Word64, Word64)
 
 fileSize :: Word64
-fileSize = 100000-- 100MB
+fileSize = 100000000-- 100MB
 
 {- Naievely selects a file large enough to store the message in -}
 selectFile :: StoreContext -> Word64 -> Maybe String
