@@ -38,7 +38,8 @@ addMessageToContext ctx name len = insert name file' ctx
 {- Dumps a bytestream in a file handle. -}
 writeToFile :: IO.Handle -> Word64 -> Producer ByteString IO () -> IO()
 writeToFile file len bytes = do
-	mapM (hPut file) $ BL.toChunks $ encode len
+	let header = Data.ByteString.concat $ BL.toChunks $ encode len
+	hPut file header
 	runEffect $ for bytes (liftIO . hPut file) >-> P.take (fromIntegral len)
 
 {- Returns an open file, either an existing one from the context, or
@@ -71,10 +72,23 @@ persistFromSocket ctx len sock = persist ctx len $ fromSocket sock 4096
 {- Persist data from a producer to a file. -}
 persist :: StoreContext -> Word64 -> Producer ByteString IO () -> IO(StoreContext)
 persist ctx len bytes = do
+	-- Gets a file, makes it if one doesn't exist
 	(ctx', name, file) <- getFile ctx totalLength
+	-- Writes the bytes to the file
 	writeToFile file len bytes
-	let ctx'' = addMessageToContext ctx' name totalLength
-	return ctx''
+	-- Flushes the file
+	IO.hFlush file
+	-- Updates the context
+	return $ addMessageToContext ctx' name totalLength
 	where
 		overhead = 8
 		totalLength = overhead + len
+
+main :: IO()
+main = do 
+	persistFromMemory ctx (fromIntegral l) bytes
+	return ()
+	where
+		ctx = Data.Map.empty
+		l = Data.ByteString.length bytes
+		bytes = Data.ByteString.concat $ BL.toChunks $ encode "Hello World"

@@ -50,26 +50,31 @@ putWorker mqs socket = do
         putMVar mqs qs
     putWorker mqs socket
 
--- Er zijn 2 gevallen:
---
--- geheugen vrij: data gaat eerst in het geheugen, dan op de schijf
--- niet genoeg geheugen vrij: data gaat op de schijf
---
--- data gaat naar de schijf met een lazy bytestring
--- data staat in het geheugen in een gewone bytestring
---
--- de memory buffer worker zorgt ervoor dat de memory buffer optimaal wordt gebruikt. Dat
--- betekent dat de oudste data altijd in de memory buffer staat.
--- dat betekent dat initieel als er data binnenkomt dat deze meteen naar de memory buffer
--- gaat. wanneer deze vol is stopt het met lezen van de input.
---
--- Wanneer er ruimte vrij komt in de buffer controleert de memory buffer of er ongebufferde data
--- op de hardeschijf staat. Als dat zo is dan leest het die naar de buffer. Als het niet zo is
--- dan start hij weer met lezen van de netwerk input.
---
--- De hardeschijf putWorker leest van de input en schrijft naar de hardeschijf. Om concurrent
--- van de schijf te lezen (om meerdere concurrente transacties te ondersteunen) kunnen we meerdere
--- voorgealloceerde bestanden gebruiken. Om fragmentatie te voorkomen geen bestand per transactie.  
+{-
+
+Receiving data worker: 
+
+There are three cases, tried in order:
+
+A reader is available: The message is directly streamed to reader, no memory is allocated, no data is saved. If the reader disconnects prematurely, the transaction fails and has to be retried.
+
+Memory is free: Data is streamed to memory, and then to the hard disk.
+
+Disk space is free: Data is streamed directly to disk.
+
+-}
+
+{-
+
+The memory buffer worker:
+
+It makes sure that the memory buffer is always being optimally used. This means that the oldest data is always in the memory buffer.
+
+When memory is released the worker reads the oldest data on disk into memory.
+
+Not sure if this makes sense, would it ever happen that when the memory buffer is made empty there is no consumer that would want to read from disk directly?
+
+-}
 
 persist :: QueueState -> Message -> (QueueState, IO())
 persist qs m | memoryFreeDiskHasQueue qs m = (queueStateStore qs Disk m, saveToDisk m)
@@ -79,34 +84,6 @@ persist qs m | memoryFreeDiskHasQueue qs m = (queueStateStore qs Disk m, saveToD
     saveToBoth = do 
       strictMessage <- saveToMemory m
       saveToDisk strictMessage
-
---
--- Iets wordt geappend aan de queue. Yield een nieuwe queue met het laatste element bovenop. Een
--- linked list is waarschijnlijk het handigst. Dus een QueueState heeft een link naar het nieuwste
--- element en het oudste element.
---
--- Er is ook een link naar het oudste element op de schijf, omdat die wellicht ingeswapped moet
--- worden.
--- 
--- Performance ding: als er geheugen vrij is moet dat gebruikt worden, dus het moet mogelijk zijn
--- voor nieuwe elementen om voor te pikken in de memory queue. Volgorde is niet zo heel belangrijk.
--- Maar om eerlijkheid van de queue te garanderen mag het niet zo zijn dat volgorde wordt genegeerd.
---
--- Hoe staan dingen op de hardeschijf?
---
--- We willen messages van enkele bytes tot honderden mb's ondersteunen. Maar vooral veel kleine messages
--- dus we gebruiken geprealloceerde files die meerdere messages bevatten. Omdat het een queue is, kunnen
--- we er een cyclische buffer van maken.
---
--- Dus iedere file heeft een lengte, en een 0 index.
--- Iedere message heeft een offset en een length. 
---
--- Er mag maar 1 concurrente lezer zijn, en maar 1 concurrente schrijver. Dit om contentie op de hdd te
--- voorkomen.  
--- 
--- Waarom zouden er meerdere files zijn? Om te voorkomen dat alle benodigde ruimte geprealloceerd moet zijn.
--- Willen we dat echt? ... ik weet het niet..
--- 
 
 saveToDisk (Message length sock) = undefined
 saveToDisk bs = 
