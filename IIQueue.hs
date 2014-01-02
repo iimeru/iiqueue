@@ -29,16 +29,16 @@ data QueueState = QueueState {
 	qsOldestDiskItem :: Item
 }
 
+data StorageType = Disk | DiskMemory
+
 data Item = Item {
 	itemTransaction :: Transaction,
 	itemNext :: Maybe MemoryItem
 }
 
-data Context {
-}
+data Context {}
 
-data Configuration {
-}
+data Configuration {}
 
 
 main :: IO ()
@@ -70,16 +70,15 @@ parseHeader = undefined
 writerLoop :: MVar(QueueState) -> Socket -> IO ()
 putWorker mqs socket = do
 	headerBytes <- recv socket 8
-	let (_, length) = parseHeader headerBytes
+	let (_, len) = parseHeader headerBytes
 	qs <- takeMVar mqs
-	if (length <= (qsMaxMessageSize qs)) then do
-		let (qs',actions) = persist qs (Message length socket)
+	if (len <= (qsMaxMessageSize qs)) then do
+		let (qs',actions) = persist qs (Message len socket)
 		putMVar mqs qs'
 		actions
 	else do
 		putMVar mqs qs
 		writerLoop mqs socket
-
 
 {-
 
@@ -117,29 +116,34 @@ where
 		strictMessage <- saveToMemory m
 		saveToDisk strictMessage
 
-	saveToDisk (Message length sock) = undefined
+	saveToDisk (Message len sock) = undefined
 	saveToDisk bs = undefined
 	saveToMemory = undefined
 
-data StorageType = Disk | DiskMemory
+{-
+	queueStateStore is a helper function that updates the queueState with the size of the message that is to be saved.
+-}
 queueStateStore :: QueueState -> StorageType -> Message -> QueueState
-queueStateStore qs Disk (Message length _) = qs
+queueStateStore qs Disk (Message len _) = qs
 	{
-		qsPersistanceUsed = (qsPersistanceUsed qs) - length
+		qsPersistanceUsed = (qsPersistanceUsed qs) - len
 	} 
-queueStateStore qs DiskMemory (Message length _) = qs
+queueStateStore qs DiskMemory (Message len _) = qs
 	{
-		qsPersistanceUsed = (qsPersistanceUsed qs) - length,
-		qsBufferUsed = (qsBufferUsed qs) - length
+		qsPersistanceUsed = (qsPersistanceUsed qs) - len,
+		qsBufferUsed = (qsBufferUsed qs) - len
 	} 
 
-memoryFreeDiskHasQueue qs (Message length _) =
-	qsBufferSize qs - qsBufferUsed qs >= length &&
+memoryFreeDiskHasQueue :: QueueState -> Message -> Bool
+memoryFreeDiskHasQueue qs (Message len _) =
+	qsBufferSize qs - qsBufferUsed qs >= len &&
 	qsPersistanceUsed qs > 0
 
-memoryFull qs (Message length _) = 
-	qsBufferSize qs - qsBufferUsed qs < length
+memoryFull :: QueueState -> Message -> Bool
+memoryFull qs (Message len _) = 
+	qsBufferSize qs - qsBufferUsed qs < len
 
-memoryFreeDiskEmpty qs (Message length _) =
-	qsBufferSize qs - qsBufferUsed qs >= length &&
+memoryFreeDiskEmpty :: QueueState -> Message -> Bool
+memoryFreeDiskEmpty qs (Message len _) =
+	qsBufferSize qs - qsBufferUsed qs >= len &&
 	qsPersistanceUsed qs == 0
