@@ -37,6 +37,23 @@ data Item = Item {
 }
 
 data Context {}
+{-
+
+A writerlistener needs:
+
+- To sink a message when possible.
+
+A readerListener needs:
+
+- To be passed messages when they are available.
+
+So writers and readers basically notify their availability. 
+
+- To fetch a reader if there is one available
+- To fetch memory space if it is available
+- To fetch diskspace if it is available
+
+-}
 
 data Configuration {}
 
