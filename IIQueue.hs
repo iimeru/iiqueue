@@ -1,12 +1,9 @@
 module IIQueue where
 
-import Control.Monad
 import Control.Concurrent
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
-import Network.Socket.ByteString
+
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString.Char8 as BC
 
 data Message = Message Int Socket
 
@@ -23,20 +20,12 @@ data QueueState = QueueState {
 	qsBufferSize :: Int,
 	qsPersistanceUsed :: Int,
 	qsPersistanceSize :: Int,
-	qsMaxMessageSize :: Int,
-	qsNewestItem :: Item,
-	qsOldestItem :: Item,
-	qsOldestDiskItem :: Item
+	qsMaxMessageSize :: Int
 }
 
 data StorageType = Disk | DiskMemory
 
-data Item = Item {
-	itemTransaction :: Transaction,
-	itemNext :: Maybe MemoryItem
-}
 
-data Context {}
 {-
 
 A writerlistener needs:
@@ -47,7 +36,9 @@ A readerListener needs:
 
 - To be passed messages when they are available.
 
-So writers and readers basically notify their availability. 
+So writers and readers basically notify their availability.
+
+A single thread connects readers to writers.
 
 - To fetch a reader if there is one available
 - To fetch memory space if it is available
@@ -55,23 +46,65 @@ So writers and readers basically notify their availability.
 
 -}
 
-data Configuration {}
-
+data Configuration = Configuration {}
 
 main :: IO ()
 main = do
 	configuration <- readConfiguration
-	context <- initializeContext configuration
 
-	startWritersListener configuration context
-	startReadersListener configuration context
+	writers <- startWritersListener configuration
+	readers <- startReadersListener configuration
+
+	startConnector configuration writers readers
+
 
 readConfiguration :: IO(Configuration)
 readConfiguration = undefined
 
-initializeContext :: Configuration -> IO(Context)
-initializeContext c = undefined
 
+data ConnectorS = ConnectorS {
+	cnWriters :: [Socket],
+	cnReaders :: [Socket],
+	cnQueueState :: QueueState
+}
+
+startConnector :: Configuration -> Chan(Socket) -> Chan(Socket) -> IO()
+startConnector c wsC rsC = connectorLoop $ newQueueState c
+	where
+		connectorLoop cs = do
+			ws' <- appendChanToList wsC ws
+			rs' <- appendChanToList rsC rs
+			cs' <- connectResources $ ConnectorS ws' rs' qs
+
+			connectorLoop cs'
+			where
+				ws = cnWriters cs
+				rs = cnReaders cs
+				qs = cnQueueState cs
+
+		appendChanToList :: Chan(a) -> [a] -> IO([a])
+		appendChanToList chan list = do
+			empty <- isEmptyChan chan
+			if empty then
+				return list
+				else do
+					newVal <- readChan chan
+					return $ newVal : list
+
+connectResources :: ConnectorS -> IO(ConnectorS)
+connectResources cs 
+	| ws == [] && rs == [] = return cs
+	where
+		ws = cnWriters cs
+		rs = cnReaders cs
+		qs = cnQueueState cs		 
+
+
+startWritersListener = undefined
+startReadersListener = undefined
+newQueueState c = undefined
+
+{-}
 startWritersListener :: Configuration -> Context -> IO()
 startWritersListener = forkIO $ do
 	let queueState = QueueState 0 128 0 1024 25 
@@ -96,7 +129,7 @@ putWorker mqs socket = do
 	else do
 		putMVar mqs qs
 		writerLoop mqs socket
-
+-}
 {-
 
 The memory buffer worker:
@@ -122,7 +155,7 @@ Memory is free: Data is streamed to memory, and then to the hard disk.
 Disk space is free: Data is streamed directly to disk.
 
 -}
-
+{-
 persist :: QueueState -> Message -> (QueueState, IO())
 persist qs m 
 	| memoryFreeDiskHasQueue qs m = (queueStateStore qs Disk m, saveToDisk m)
@@ -164,3 +197,4 @@ memoryFreeDiskEmpty :: QueueState -> Message -> Bool
 memoryFreeDiskEmpty qs (Message len _) =
 	qsBufferSize qs - qsBufferUsed qs >= len &&
 	qsPersistanceUsed qs == 0
+-}
