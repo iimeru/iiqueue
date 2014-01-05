@@ -1,6 +1,6 @@
 module IIQueue where
 
-import Control.Concurrent
+import Control.Concurrent.STM
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 
 import qualified Data.ByteString as BS
@@ -61,19 +61,18 @@ main = do
 readConfiguration :: IO(Configuration)
 readConfiguration = undefined
 
-
 data ConnectorS = ConnectorS {
 	cnWriters :: [Socket],
 	cnReaders :: [Socket],
 	cnQueueState :: QueueState
 }
 
-startConnector :: Configuration -> Chan(Socket) -> Chan(Socket) -> IO()
+startConnector :: Configuration -> TChan(Socket) -> TChan(Socket) -> IO()
 startConnector c wsC rsC = connectorLoop $ newQueueState c
 	where
 		connectorLoop cs = do
-			ws' <- appendChanToList wsC ws
-			rs' <- appendChanToList rsC rs
+			ws' <- atomically $ appendChanToList wsC ws
+			rs' <- atomically $ appendChanToList rsC rs
 			cs' <- connectResources $ ConnectorS ws' rs' qs
 
 			connectorLoop cs'
@@ -82,22 +81,27 @@ startConnector c wsC rsC = connectorLoop $ newQueueState c
 				rs = cnReaders cs
 				qs = cnQueueState cs
 
-		appendChanToList :: Chan(a) -> [a] -> IO([a])
+		appendChanToList :: TChan(a) -> [a] -> STM([a])
 		appendChanToList chan list = do
-			empty <- isEmptyChan chan
+			empty <- isEmptyTChan chan
 			if empty then
 				return list
 				else do
-					newVal <- readChan chan
+					newVal <- readTChan chan
 					return $ newVal : list
 
 connectResources :: ConnectorS -> IO(ConnectorS)
 connectResources cs 
 	| ws == [] && rs == [] = return cs
+	| ws == [] = handleJustReaders cs
+	| otherwise = do
+		connectWriterToReader w r
+		connectResources restCS
 	where
-		ws = cnWriters cs
-		rs = cnReaders cs
-		qs = cnQueueState cs		 
+		ws@[w:rws] = cnWriters cs
+		rs@[r:rrs] = cnReaders cs
+		qs = cnQueueState cs
+		restCS = cs { cnWriters = rws, cnReaders = rrs}
 
 
 startWritersListener = undefined
