@@ -1,31 +1,9 @@
 module IIQueue where
 
+import Configuration
+import QueueState
 import Control.Concurrent.STM
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
-
-import qualified Data.ByteString as BS
-
-data Message = Message Int Socket
-
-data Transaction = Transaction {
-	transactionBuffered :: Bool,
-	transactionPersisted :: Bool,
-	transactionProcessed :: Bool,
-	transactionData :: BS.ByteString,
-	transactionPersistanceId :: Int
-}
-
-data QueueState = QueueState {
-	qsBufferUsed :: Int,
-	qsBufferSize :: Int,
-	qsPersistanceUsed :: Int,
-	qsPersistanceSize :: Int,
-	qsMaxMessageSize :: Int
-}
-
-data StorageType = Disk | DiskMemory
-
-data Configuration = Configuration {}
 
 {-
 
@@ -55,10 +33,6 @@ main = do
 	readers <- startReadersListener configuration
 
 	startConnector configuration writers readers
-
-
-readConfiguration :: IO(Configuration)
-readConfiguration = undefined
 
 data ConnectorS = ConnectorS {
 	cnWriters :: [Socket],
@@ -151,8 +125,6 @@ startWritersListener c = undefined c
 startReadersListener :: Configuration -> IO(TChan Socket)
 startReadersListener = undefined
 
-newQueueState :: Configuration -> QueueState
-newQueueState c = undefined c
 
 newConnectorS :: Configuration -> ConnectorS
 newConnectorS c = ConnectorS [] [] $ newQueueState c
