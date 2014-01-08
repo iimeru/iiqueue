@@ -125,7 +125,6 @@ startWritersListener c = undefined c
 startReadersListener :: Configuration -> IO(TChan Socket)
 startReadersListener = undefined
 
-
 newConnectorS :: Configuration -> ConnectorS
 newConnectorS c = ConnectorS [] [] $ newQueueState c
 
@@ -174,72 +173,4 @@ putWorker mqs socket = do
 	else do
 		putMVar mqs qs
 		writerLoop mqs socket
--}
-{-
-
-The memory buffer worker:
-
-It makes sure that the memory buffer is always being optimally used. This means that the oldest data is always in the memory buffer.
-
-When memory is released the worker reads the oldest data on disk into memory.
-
-Not sure if this makes sense, would it ever happen that when the memory buffer is made empty there is no consumer that would want to read from disk directly?
-
--}
-
-{-
-
-Receiving data worker: 
-
-There are three cases, tried in order:
-
-A reader is available: The message is directly streamed to reader, no memory is allocated, no data is saved. If the reader disconnects prematurely, the transaction fails and has to be retried.
-
-Memory is free: Data is streamed to memory, and then to the hard disk.
-
-Disk space is free: Data is streamed directly to disk.
-
--}
-{-
-persist :: QueueState -> Message -> (QueueState, IO())
-persist qs m 
-	| memoryFreeDiskHasQueue qs m = (queueStateStore qs Disk m, saveToDisk m)
-	| memoryFull qs m = (queueStateStore qs Disk m, saveToDisk m)
-	| memoryFreeDiskEmpty qs m = (queueStateStore qs DiskMemory m, saveToBoth)
-where
-	saveToBoth = do 
-		strictMessage <- saveToMemory m
-		saveToDisk strictMessage
-
-	saveToDisk (Message len sock) = undefined
-	saveToDisk bs = undefined
-	saveToMemory = undefined
-
-{-
-	queueStateStore is a helper function that updates the queueState with the size of the message that is to be saved.
--}
-queueStateStore :: QueueState -> StorageType -> Message -> QueueState
-queueStateStore qs Disk (Message len _) = qs
-	{
-		qsPersistanceUsed = (qsPersistanceUsed qs) - len
-	} 
-queueStateStore qs DiskMemory (Message len _) = qs
-	{
-		qsPersistanceUsed = (qsPersistanceUsed qs) - len,
-		qsBufferUsed = (qsBufferUsed qs) - len
-	} 
-
-memoryFreeDiskHasQueue :: QueueState -> Message -> Bool
-memoryFreeDiskHasQueue qs (Message len _) =
-	qsBufferSize qs - qsBufferUsed qs >= len &&
-	qsPersistanceUsed qs > 0
-
-memoryFull :: QueueState -> Message -> Bool
-memoryFull qs (Message len _) = 
-	qsBufferSize qs - qsBufferUsed qs < len
-
-memoryFreeDiskEmpty :: QueueState -> Message -> Bool
-memoryFreeDiskEmpty qs (Message len _) =
-	qsBufferSize qs - qsBufferUsed qs >= len &&
-	qsPersistanceUsed qs == 0
 -}
