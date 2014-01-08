@@ -21,10 +21,6 @@ available.
 For the memory, the oldest message could be
 the head of a list.
 
-Do we need to know whether the oldest message
-on disk is older than the oldest message in 
-memory?
-
 Things we want to do with a QueueState:
 
 readMessageFromDisk, readMessageFromMemory
@@ -36,7 +32,8 @@ data QueueState = QueueState {
 	qsBufferSize :: Int,
 	qsPersistanceUsed :: Int,
 	qsPersistanceSize :: Int,
-	qsMaxMessageSize :: Int
+	qsMaxMessageSize :: Int,
+	qsMessages :: [Message]
 }
 
 mega :: Int -> Int
@@ -46,7 +43,7 @@ giga :: Int -> Int
 giga = (*) (mega 1024)
 
 newQueueState :: Configuration -> QueueState
-newQueueState _ = QueueState 0 (mega 150) 0 (giga 100) (mega 100)
+newQueueState _ = QueueState 0 (mega 150) 0 (giga 100) (mega 100) []
 
 data Message = Message Int Socket
 

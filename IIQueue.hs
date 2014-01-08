@@ -23,6 +23,9 @@ A single thread connects readers to writers.
 - To fetch memory space if it is available
 - To fetch diskspace if it is available
 
+The messageBuffer would be a pipe, messages get passed into it
+and whenever needed they can be read back to readers.
+
 -}
 
 main :: IO ()
@@ -32,7 +35,9 @@ main = do
 	writers <- startWritersListener configuration
 	readers <- startReadersListener configuration
 
-	startConnector configuration writers readers
+	messageBuffer <- startMessageBuffer configuration
+
+	startConnector configuration writers readers -- messageBuffer
 
 data ConnectorS = ConnectorS {
 	cnWriters :: [Socket],
@@ -124,6 +129,13 @@ startWritersListener c = undefined c
 -}
 startReadersListener :: Configuration -> IO(TChan Socket)
 startReadersListener = undefined
+
+{-
+startMessageBuffer starts a buffered pipe that accepts messages and from which messages can be read, the pipe is file backed.
+-}
+startMessageBuffer :: Configuration -> a
+startMessageBuffer = undefined
+
 
 newConnectorS :: Configuration -> ConnectorS
 newConnectorS c = ConnectorS [] [] $ newQueueState c
