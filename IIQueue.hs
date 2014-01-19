@@ -1,7 +1,7 @@
 module IIQueue where
 
 import Configuration
-import QueueState
+import MessageBuffer
 import Control.Concurrent.STM
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 
@@ -34,30 +34,40 @@ main = do
 
 	writers <- startWritersListener configuration
 	readers <- startReadersListener configuration
+	messageBuf <- startMessageBuffer configuration
 
-	messageBuffer <- startMessageBuffer configuration
+	let channels = Channels writers readers messageBuf
+	startConnector configuration channels
 
-	startConnector configuration writers readers -- messageBuffer
+type WriterListener = TChan(Writer)
+type ReaderListener = TChan(Reader)
+
+type Writer = Socket
+type Reader = Socket
 
 data ConnectorS = ConnectorS {
-	cnWriters :: [Socket],
-	cnReaders :: [Socket],
-	cnQueueState :: QueueState
+	cnWriters :: [Writer],
+	cnReaders :: [Reader]
 }
 
-startConnector :: Configuration -> TChan(Socket) -> TChan(Socket) -> IO()
-startConnector c wsC rsC = connectorLoop $ newConnectorS c
+data Channels = Channels {
+	writersChannel :: WriterListener,
+	readersChannel :: ReaderListener,
+	messageBuffer :: MessageBuffer
+}
+
+startConnector :: Configuration -> Channels -> IO()
+startConnector _ (Channels wsC rsC _) = connectorLoop $ ConnectorS [] []
 	where
 		connectorLoop cs = do
 			ws' <- atomically $ appendChanToList wsC ws
 			rs' <- atomically $ appendChanToList rsC rs
-			cs' <- connectResources $ ConnectorS ws' rs' qs
+			cs' <- connectResources  $ ConnectorS ws' rs'
 
 			connectorLoop cs'
 			where
 				ws = cnWriters cs
 				rs = cnReaders cs
-				qs = cnQueueState cs
 
 		appendChanToList :: TChan(a) -> [a] -> STM([a])
 		appendChanToList chan list = do
@@ -93,7 +103,7 @@ slower than writers.
 
 -}
 connectResources :: ConnectorS -> IO(ConnectorS)
-connectResources cs@(ConnectorS ws rs _)
+connectResources cs@(ConnectorS ws rs)
 	-- TODO would this be faster if we iterated over all readers
 	-- at once? Using the monadic fold thingy.
 	| not $ null rs = connectReader cs 
@@ -102,14 +112,14 @@ connectResources cs@(ConnectorS ws rs _)
 
 {- Connects a reader to a message. -}
 connectReader :: ConnectorS -> IO(ConnectorS)
-connectReader cs@(ConnectorS ws _ qs)
+connectReader cs@(ConnectorS ws _)
 	| oldestMessageAvailable = readOldestMessage cs
 	| memoryHasAMessage = readOldestMemoryMessage cs
 	| writerAvailable = connectToWriter cs
 	| otherwise = return cs
 	where
-		oldestMessageAvailable = undefined qs
-		memoryHasAMessage = undefined qs
+		oldestMessageAvailable = undefined
+		memoryHasAMessage = undefined
 		writerAvailable = not $ null ws
 
 {- Persists a message from a writer. -}
@@ -138,7 +148,7 @@ startMessageBuffer = undefined
 
 
 newConnectorS :: Configuration -> ConnectorS
-newConnectorS c = ConnectorS [] [] $ newQueueState c
+newConnectorS _ = ConnectorS [] []
 
 {-
  Reads the oldest message, from disk or from memory. It is passed to the
