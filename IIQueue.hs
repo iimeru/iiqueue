@@ -6,7 +6,6 @@ import Control.Concurrent.STM
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 
 {-
-
 A writerlistener needs:
 
 - To sink a message when possible.
@@ -25,7 +24,6 @@ A single thread connects readers to writers.
 
 The messageBuffer would be a pipe, messages get passed into it
 and whenever needed they can be read back to readers.
-
 -}
 
 main :: IO ()
@@ -79,7 +77,6 @@ startConnector _ (Channels wsC rsC _) = connectorLoop $ ConnectorS [] []
 					return $ newVal : list
 
 {-
-
 So the goal is to get messages from readers to writers.
 
 When there is a reader:
@@ -100,7 +97,6 @@ from disk, and the second is reading from memory. Any additional
 readers will read directly from writers.
 Note: The previous note only happens when at some point readers are
 slower than writers.
-
 -}
 connectResources :: ConnectorS -> IO(ConnectorS)
 connectResources cs@(ConnectorS ws rs)

@@ -1,4 +1,4 @@
-module IIQueueStore where
+module FileStore where
 
 import Prelude hiding (lookup)
 import Data.Map
@@ -84,11 +84,28 @@ persist ctx len bytes = do
 		overhead = 8
 		totalLength = overhead + len
 
+makeContext :: StoreContext
+makeContext = Data.Map.empty
+
+data AsyncFileStoreContext = AsyncFileStoreContext {
+	storeContext :: StoreContext,
+	storeWorking :: Bool
+}
+
+{-
+  The goal of the async file store is to be able to dispatch the writing
+  of files to it, and it will answer if it is busy writing at the moment.
+  I don't think it is necessary for it to queue workers at the moment, it
+  will just refuse to work when it is busy.
+-}
+asyncFileStore :: AsyncFileStoreContext 
+asyncFileStore = undefined
+
 main :: IO()
 main = do 
 	persistFromMemory ctx (fromIntegral l) bytes
 	return ()
 	where
-		ctx = Data.Map.empty
+		ctx = makeContext
 		l = Data.ByteString.length bytes
 		bytes = Data.ByteString.concat $ BL.toChunks $ encode "Hello World"

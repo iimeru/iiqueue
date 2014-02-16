@@ -10,5 +10,5 @@ Cabal-Version:       >=1.2
  
 Library
   Build-Depends:     base, random, binary, containers, bytestring, network, pipes, pipes-network >= 0.6.0, stm
-  Exposed-modules:   IIQueueStore, IIQueue
+  Exposed-modules:   FileStore, IIQueue
   ghc-options:       -Wall
