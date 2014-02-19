@@ -101,6 +101,10 @@ data AsyncFileStoreContext = AsyncFileStoreContext {
 asyncFileStore :: AsyncFileStoreContext 
 asyncFileStore = undefined
 
+{- The reader of the file store must write to disk the filename, length and
+offset of the message it has read. This is so that the state can always be
+reconstructed.-}
+
 main :: IO()
 main = do 
 	persistFromMemory ctx (fromIntegral l) bytes
