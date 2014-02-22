@@ -13,11 +13,14 @@ import qualified Pipes.Prelude as P
 import Pipes.Network.TCP (fromSocket)
 import Network
 import qualified System.IO as IO
+import Control.Concurrent (MVar, newMVar, readMVar, takeMVar, putMVar, forkIO)
 
 -- FileName -> StoreFile
 type StoreContext = Map String StoreFile
 -- File Handle, Size, Offset
 type StoreFile = (IO.Handle, Word64, Word64)
+-- Size, Producer
+type Message = (Word64, Producer ByteString IO ())
 
 fileSize :: Word64
 fileSize = 100000000-- 100MB
@@ -63,15 +66,15 @@ getFile ctx len = maybe makeNewFile useExistingFile (selectFile ctx len)
 
 {- Persists a ByteString memory buffer to a file. -}
 persistFromMemory :: StoreContext -> Word64 -> ByteString -> IO(StoreContext)
-persistFromMemory ctx len bytestring = persist ctx len $ yield bytestring
+persistFromMemory ctx len bytestring = persist ctx (len, yield bytestring)
 
 {- Persists the data received from a socket to a file. -}
 persistFromSocket :: StoreContext -> Word64 -> Socket -> IO(StoreContext)
-persistFromSocket ctx len sock = persist ctx len $ fromSocket sock 4096
+persistFromSocket ctx len sock = persist ctx (len, fromSocket sock 4096)
 
 {- Persist data from a producer to a file. -}
-persist :: StoreContext -> Word64 -> Producer ByteString IO () -> IO(StoreContext)
-persist ctx len bytes = do
+persist :: StoreContext -> Message -> IO(StoreContext)
+persist ctx (len, bytes) = do
 	-- Gets a file, makes it if one doesn't exist
 	(ctx', name, file) <- getFile ctx totalLength
 	-- Writes the bytes to the file
@@ -88,8 +91,8 @@ makeContext :: StoreContext
 makeContext = Data.Map.empty
 
 data AsyncFileStoreContext = AsyncFileStoreContext {
-	storeContext :: StoreContext,
-	storeWorking :: Bool
+	storeContext :: MVar StoreContext,
+	storeWorking :: MVar Bool
 }
 
 {-
@@ -98,8 +101,29 @@ data AsyncFileStoreContext = AsyncFileStoreContext {
   I don't think it is necessary for it to queue workers at the moment, it
   will just refuse to work when it is busy.
 -}
-asyncFileStore :: AsyncFileStoreContext 
-asyncFileStore = undefined
+asyncFileStore :: IO(AsyncFileStoreContext) 
+asyncFileStore = do
+	working <- newMVar False
+	ctx <- newMVar makeContext
+	return $ AsyncFileStoreContext ctx working
+
+asyncFileStoreAvailable :: AsyncFileStoreContext -> IO(Bool)
+asyncFileStoreAvailable ctx = do
+	working <- readMVar $ storeWorking ctx
+	return $ not working
+
+asyncFileStorePersist :: AsyncFileStoreContext -> Message -> IO(Bool)
+asyncFileStorePersist actx m = do
+	available <- asyncFileStoreAvailable actx
+	if available
+		then do 
+			forkIO $ do
+				ctx <- takeMVar $ storeContext actx
+				ctx' <- persist ctx m
+				putMVar (storeContext actx) ctx'
+			return True
+		else
+			return False
 
 {- The reader of the file store must write to disk the filename, length and
 offset of the message it has read. This is so that the state can always be
