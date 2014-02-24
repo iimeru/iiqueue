@@ -64,14 +64,6 @@ getFile ctx len = maybe makeNewFile useExistingFile (selectFile ctx len)
 			where
 				(existingHandle,_,_) = fromJust $ lookup n ctx
 
-{- Persists a ByteString memory buffer to a file. -}
-persistFromMemory :: StoreContext -> Word64 -> ByteString -> IO(StoreContext)
-persistFromMemory ctx len bytestring = persist ctx (len, yield bytestring)
-
-{- Persists the data received from a socket to a file. -}
-persistFromSocket :: StoreContext -> Word64 -> Socket -> IO(StoreContext)
-persistFromSocket ctx len sock = persist ctx (len, fromSocket sock 4096)
-
 {- Persist data from a producer to a file. -}
 persist :: StoreContext -> Message -> IO(StoreContext)
 persist ctx (len, bytes) = do
