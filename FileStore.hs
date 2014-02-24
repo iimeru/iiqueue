@@ -10,8 +10,6 @@ import System.Random
 import Numeric
 import Pipes
 import qualified Pipes.Prelude as P
-import Pipes.Network.TCP (fromSocket)
-import Network
 import qualified System.IO as IO
 import Control.Concurrent (MVar, newMVar, takeMVar, putMVar, forkIO)
 
@@ -128,7 +126,7 @@ reconstructed.-}
 
 main :: IO()
 main = do 
-	persistFromMemory ctx (fromIntegral l) bytes
+	persist ctx (fromIntegral l, yield bytes)
 	return ()
 	where
 		ctx = makeContext
