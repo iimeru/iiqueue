@@ -13,7 +13,7 @@ import qualified Pipes.Prelude as P
 import Pipes.Network.TCP (fromSocket)
 import Network
 import qualified System.IO as IO
-import Control.Concurrent (MVar, newMVar, readMVar, takeMVar, putMVar, forkIO)
+import Control.Concurrent (MVar, newMVar, takeMVar, putMVar, forkIO)
 
 -- FileName -> StoreFile
 type StoreContext = Map String StoreFile
@@ -107,23 +107,28 @@ asyncFileStore = do
 	ctx <- newMVar makeContext
 	return $ AsyncFileStoreContext ctx working
 
-asyncFileStoreAvailable :: AsyncFileStoreContext -> IO(Bool)
-asyncFileStoreAvailable ctx = do
-	working <- readMVar $ storeWorking ctx
+-- If this function returns true it assumes you are going to work
+-- on it, so it flips the value. 
+asyncFileStoreAvailableAndFlip :: AsyncFileStoreContext -> IO(Bool)
+asyncFileStoreAvailableAndFlip ctx = do
+	working <- takeMVar $ storeWorking ctx
+	if not working
+		then do
+			putMVar (storeWorking ctx) True
+		else do
+			putMVar (storeWorking ctx) False
 	return $ not working
 
-asyncFileStorePersist :: AsyncFileStoreContext -> Message -> IO(Bool)
+-- This function assumes the filestore is available.
+asyncFileStorePersist :: AsyncFileStoreContext -> Message -> IO()
 asyncFileStorePersist actx m = do
-	available <- asyncFileStoreAvailable actx
-	if available
-		then do 
-			forkIO $ do
-				ctx <- takeMVar $ storeContext actx
-				ctx' <- persist ctx m
-				putMVar (storeContext actx) ctx'
-			return True
-		else
-			return False
+	forkIO $ do
+		ctx <- takeMVar $ storeContext actx
+		ctx' <- persist ctx m
+		putMVar (storeContext actx) ctx'
+		takeMVar $ storeWorking actx
+		putMVar (storeWorking actx) False
+	return ()
 
 {- The reader of the file store must write to disk the filename, length and
 offset of the message it has read. This is so that the state can always be
