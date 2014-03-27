@@ -98,15 +98,12 @@ asyncFileStore = do
 	return $ AsyncFileStoreContext ctx working
 
 -- If this function returns true it assumes you are going to work
--- on it, so it flips the value. 
+-- on it, so it always sets working to storeWorking to true if it's not.
 asyncFileStoreAvailableAndFlip :: AsyncFileStoreContext -> IO(Bool)
 asyncFileStoreAvailableAndFlip ctx = do
-	working <- takeMVar $ storeWorking ctx
-	if not working
-		then do
-			putMVar (storeWorking ctx) True
-		else do
-			putMVar (storeWorking ctx) False
+	let workingMVar = storeWorking ctx
+	working <- takeMVar workingMVar
+	putMVar workingMVar True
 	return $ not working
 
 -- This function assumes the filestore is available.
