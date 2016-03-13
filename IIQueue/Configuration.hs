@@ -1,4 +1,4 @@
-module Configuration where
+module IIQueue.Configuration where
 
 data Configuration = Configuration {}
 

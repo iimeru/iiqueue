@@ -1,7 +1,8 @@
 module IIQueue where
 
-import Configuration
-import MessageBuffer
+import IIQueue.QueueState
+import IIQueue.Configuration
+import IIQueue.MessageBuffer
 import Control.Concurrent.STM
 import Network.Socket hiding (send, sendTo, recv, recvFrom)
 
@@ -98,28 +99,28 @@ readers will read directly from writers.
 Note: The previous note only happens when at some point readers are
 slower than writers.
 -}
-connectResources :: ConnectorS -> IO(ConnectorS)
-connectResources cs@(ConnectorS ws rs)
+connectResources :: QueueState -> ConnectorS -> IO(QueueState,ConnectorS)
+connectResources qs cs@(ConnectorS ws rs)
 	-- TODO would this be faster if we iterated over all readers
 	-- at once? Using the monadic fold thingy.
-	| not $ null rs = connectReader cs 
-	| not $ null ws = bufferWriter cs
-	| otherwise = return cs
+	| not $ null rs = connectReader qs cs 
+	| not $ null ws = bufferWriter qs cs
+	| otherwise = return (qs,cs)
 
 {- Connects a reader to a message. -}
-connectReader :: ConnectorS -> IO(ConnectorS)
-connectReader cs@(ConnectorS ws _)
-	| oldestMessageAvailable = readOldestMessage cs
-	| memoryHasAMessage = readOldestMemoryMessage cs
-	| writerAvailable = connectToWriter cs
-	| otherwise = return cs
+connectReader :: QueueState -> ConnectorS -> IO(QueueState,ConnectorS)
+connectReader qs cs@(ConnectorS ws _)
+	| oldestMessageAvailable = readOldestMessage qs cs
+	| memoryHasAMessage = readOldestMemoryMessage qs cs
+	| writerAvailable = connectToWriter qs cs
+	| otherwise = return (qs,cs)
 	where
 		oldestMessageAvailable = undefined
 		memoryHasAMessage = undefined
 		writerAvailable = not $ null ws
 
 {- Persists a message from a writer. -}
-bufferWriter :: ConnectorS -> IO(ConnectorS)
+bufferWriter :: QueueState -> ConnectorS -> IO(QueueState,ConnectorS)
 bufferWriter cs = undefined cs
 
 {-
@@ -150,20 +151,20 @@ newConnectorS _ = ConnectorS [] []
  Reads the oldest message, from disk or from memory. It is passed to the
  first reader in the ConnectorS. 
 -}
-readOldestMessage :: ConnectorS -> IO(ConnectorS)
+readOldestMessage :: QueueState -> ConnectorS -> IO(ConnectorS,QueueState)
 readOldestMessage = undefined
 
 {-
  Reads the oldest message in memory. It is passed to the
  first reader in the ConnectorS. 
 -}
-readOldestMemoryMessage :: ConnectorS -> IO(ConnectorS)
+readOldestMemoryMessage :: QueueState -> ConnectorS -> IO(ConnectorS,QueueState)
 readOldestMemoryMessage = undefined
 
 {-
  Connects the first reader in ConnectorS to the first writer. 
 -}
-connectToWriter :: ConnectorS -> IO(ConnectorS)
+connectToWriter :: QueueState -> ConnectorS -> IO(ConnectorS,QueueState)
 connectToWriter = undefined
 
 {-}

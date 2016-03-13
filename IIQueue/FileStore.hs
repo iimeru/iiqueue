@@ -1,4 +1,4 @@
-module FileStore where
+module IIQueue.FileStore where
 
 import Prelude hiding (lookup)
 import Data.Map
@@ -99,8 +99,8 @@ asyncFileStore = do
 
 -- If this function returns true it assumes you are going to work
 -- on it, so it always sets working to storeWorking to true if it's not.
-asyncFileStoreAvailableAndFlip :: AsyncFileStoreContext -> IO(Bool)
-asyncFileStoreAvailableAndFlip ctx = do
+isAsyncFileStoreAvailableAndWork :: AsyncFileStoreContext -> IO(Bool)
+isAsyncFileStoreAvailableAndWork ctx = do
 	let workingMVar = storeWorking ctx
 	working <- takeMVar workingMVar
 	putMVar workingMVar True

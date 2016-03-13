@@ -1,7 +1,7 @@
-module QueueState where
+module IIQueue.QueueState where
 
 import Network
-import Configuration
+import IIQueue.Configuration
 import Data.ByteString as BS
 
 {-
